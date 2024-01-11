@@ -20,6 +20,14 @@
  * Copyright (c) 2005 Junio C Hamano
  */
 
+enum action {
+	ACTION_START = 0,
+	ACTION_CONTINUE,
+	ACTION_SKIP,
+	ACTION_ABORT,
+	ACTION_QUIT,
+};
+
 static const char * const revert_usage[] = {
 	N_("git revert [--[no-]edit] [-n] [-m <parent-number>] [-s] [-S[<keyid>]] <commit>..."),
 	N_("git revert (--continue | --skip | --abort | --quit)"),
@@ -85,12 +93,13 @@ static int run_sequencer(int argc, const char **argv, const char *prefix,
 	const char * const * usage_str = revert_or_cherry_pick_usage(opts);
 	const char *me = action_name(opts);
 	const char *cleanup_arg = NULL;
-	int cmd = 0;
+	char *this_operation = NULL;
+	enum action cmd = ACTION_START;
 	struct option base_options[] = {
-		OPT_CMDMODE(0, "quit", &cmd, N_("end revert or cherry-pick sequence"), 'q'),
-		OPT_CMDMODE(0, "continue", &cmd, N_("resume revert or cherry-pick sequence"), 'c'),
-		OPT_CMDMODE(0, "abort", &cmd, N_("cancel revert or cherry-pick sequence"), 'a'),
-		OPT_CMDMODE(0, "skip", &cmd, N_("skip current commit and continue"), 's'),
+		OPT_CMDMODE(0, "quit", &cmd, N_("end revert or cherry-pick sequence"), ACTION_QUIT),
+		OPT_CMDMODE(0, "continue", &cmd, N_("resume revert or cherry-pick sequence"), ACTION_CONTINUE),
+		OPT_CMDMODE(0, "abort", &cmd, N_("cancel revert or cherry-pick sequence"), ACTION_ABORT),
+		OPT_CMDMODE(0, "skip", &cmd, N_("skip current commit and continue"), ACTION_SKIP),
 		OPT_CLEANUP(&cleanup_arg),
 		OPT_BOOL('n', "no-commit", &opts->no_commit, N_("don't automatically commit")),
 		OPT_BOOL('e', "edit", &opts->edit, N_("edit the commit message")),
@@ -144,32 +153,36 @@ static int run_sequencer(int argc, const char **argv, const char *prefix,
 	}
 
 	/* Check for incompatible command line arguments */
-	if (cmd) {
-		char *this_operation;
-		if (cmd == 'q')
-			this_operation = "--quit";
-		else if (cmd == 'c')
-			this_operation = "--continue";
-		else if (cmd == 's')
-			this_operation = "--skip";
-		else {
-			assert(cmd == 'a');
-			this_operation = "--abort";
-		}
-
-		verify_opt_compatible(me, this_operation,
-				"--no-commit", opts->no_commit,
-				"--signoff", opts->signoff,
-				"--mainline", opts->mainline,
-				"--strategy", opts->strategy ? 1 : 0,
-				"--strategy-option", opts->xopts.nr ? 1 : 0,
-				"-x", opts->record_origin,
-				"--ff", opts->allow_ff,
-				"--rerere-autoupdate", opts->allow_rerere_auto == RERERE_AUTOUPDATE,
-				"--no-rerere-autoupdate", opts->allow_rerere_auto == RERERE_NOAUTOUPDATE,
-				NULL);
+	switch (cmd) {
+	case ACTION_START:
+		goto skip_opt_compatibility_verification;
+	case ACTION_QUIT:
+		this_operation = "--quit";
+		break;
+	case ACTION_CONTINUE:
+		this_operation = "--continue";
+		break;
+	case ACTION_SKIP:
+		this_operation = "--skip";
+		break;
+	case ACTION_ABORT:
+		this_operation = "--abort";
+		break;
 	}
 
+	verify_opt_compatible(me, this_operation,
+			"--no-commit", opts->no_commit,
+			"--signoff", opts->signoff,
+			"--mainline", opts->mainline,
+			"--strategy", opts->strategy ? 1 : 0,
+			"--strategy-option", opts->xopts.nr ? 1 : 0,
+			"-x", opts->record_origin,
+			"--ff", opts->allow_ff,
+			"--rerere-autoupdate", opts->allow_rerere_auto == RERERE_AUTOUPDATE,
+			"--no-rerere-autoupdate", opts->allow_rerere_auto == RERERE_NOAUTOUPDATE,
+			NULL);
+
+skip_opt_compatibility_verification:
 	if (!opts->strategy && opts->default_strategy) {
 		opts->strategy = opts->default_strategy;
 		opts->default_strategy = NULL;
@@ -183,9 +196,7 @@ static int run_sequencer(int argc, const char **argv, const char *prefix,
 				"--edit", opts->edit > 0,
 				NULL);
 
-	if (cmd) {
-		opts->revs = NULL;
-	} else {
+	if (cmd == ACTION_START) {
 		struct setup_revision_opt s_r_opt;
 		opts->revs = xmalloc(sizeof(*opts->revs));
 		repo_init_revisions(the_repository, opts->revs, NULL);
@@ -198,6 +209,8 @@ static int run_sequencer(int argc, const char **argv, const char *prefix,
 		memset(&s_r_opt, 0, sizeof(s_r_opt));
 		s_r_opt.assume_dashdash = 1;
 		argc = setup_revisions(argc, argv, opts->revs, &s_r_opt);
+	} else {
+		opts->revs = NULL;
 	}
 
 	if (argc > 1)
@@ -210,19 +223,22 @@ static int run_sequencer(int argc, const char **argv, const char *prefix,
 		opts->strategy = xstrdup(getenv("GIT_TEST_MERGE_ALGORITHM"));
 	free(options);
 
-	if (cmd == 'q') {
+	switch (cmd) {
+	case ACTION_QUIT: {
 		int ret = sequencer_remove_state(opts);
 		if (!ret)
 			remove_branch_state(the_repository, 0);
 		return ret;
 	}
-	if (cmd == 'c')
+	case ACTION_CONTINUE:
 		return sequencer_continue(the_repository, opts);
-	if (cmd == 'a')
+	case ACTION_ABORT:
 		return sequencer_rollback(the_repository, opts);
-	if (cmd == 's')
+	case ACTION_SKIP:
 		return sequencer_skip(the_repository, opts);
-	return sequencer_pick_revisions(the_repository, opts);
+	case ACTION_START:
+		return sequencer_pick_revisions(the_repository, opts);
+	}
 }
 
 int cmd_revert(int argc, const char **argv, const char *prefix)
