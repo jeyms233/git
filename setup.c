@@ -1231,6 +1231,11 @@ static const char *allowed_bare_repo_to_string(
 	return NULL;
 }
 
+static int is_repo_with_working_tree(const char *path)
+{
+	return ends_with_path_components(path, ".git");
+}
+
 /*
  * We cannot decide in this function whether we are in the work tree or
  * not, since the config can only be read _after_ this function was called.
@@ -1360,7 +1365,7 @@ static enum discovery_result setup_git_directory_gently_1(struct strbuf *dir,
 		if (is_git_directory(dir->buf)) {
 			trace2_data_string("setup", NULL, "implicit-bare-repository", dir->buf);
 			if (get_allowed_bare_repo() == ALLOWED_BARE_REPO_EXPLICIT &&
-			    !ends_with_path_components(dir->buf, ".git"))
+			    !is_repo_with_working_tree(dir->buf))
 				return GIT_DIR_DISALLOWED_BARE;
 			if (!ensure_valid_ownership(NULL, NULL, dir->buf, report))
 				return GIT_DIR_INVALID_OWNERSHIP;
