@@ -1231,9 +1231,59 @@ static const char *allowed_bare_repo_to_string(
 	return NULL;
 }
 
+static int is_git_dir_of_secondary_worktree(const char *path)
+{
+	int result = 0; /* assume not */
+	struct strbuf gitfile_here = STRBUF_INIT;
+	struct strbuf gitfile_there = STRBUF_INIT;
+	const char *gitfile_contents;
+	int error_code = 0;
+
+	/*
+	 * We should be a subdirectory of /.git/worktrees inside
+	 * the $GIT_DIR of the primary worktree.
+	 *
+	 * NEEDSWORK: some folks create secondary worktrees out of a
+	 * bare repository; they don't count ;-), at least not yet.
+	 */
+	if (!strstr(path, "/.git/worktrees/"))
+		goto out;
+
+	/*
+	 * Does gitdir that points at the ".git" file at the root of
+	 * the secondary worktree roundtrip here?
+	 */
+	strbuf_addf(&gitfile_here, "%s/gitdir", path);
+	if (!file_exists(gitfile_here.buf))
+		goto out;
+	if (strbuf_read_file(&gitfile_there, gitfile_here.buf, 0) < 0)
+		goto out;
+	strbuf_trim_trailing_newline(&gitfile_there);
+
+	gitfile_contents = read_gitfile_gently(gitfile_there.buf, &error_code);
+	if ((!gitfile_contents) || strcmp(gitfile_contents, path))
+		goto out;
+
+	/* OK, we are happy */
+	result = 1;
+
+out:
+	strbuf_release(&gitfile_here);
+	strbuf_release(&gitfile_there);
+	return result;
+}
+
 static int is_repo_with_working_tree(const char *path)
 {
-	return ends_with_path_components(path, ".git");
+	/* $GIT_DIR immediately below the primary working tree */
+	if (ends_with_path_components(path, ".git"))
+		return 1;
+
+	/* Are we in $GIT_DIR of a secondary worktree? */
+	if (is_git_dir_of_secondary_worktree(path))
+		return 1;
+
+	return 0;
 }
 
 /*

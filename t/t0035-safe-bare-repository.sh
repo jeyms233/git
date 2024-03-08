@@ -31,7 +31,9 @@ expect_rejected () {
 
 test_expect_success 'setup bare repo in worktree' '
 	git init outer-repo &&
-	git init --bare outer-repo/bare-repo
+	git init --bare outer-repo/bare-repo &&
+	git -C outer-repo worktree add ../outer-secondary &&
+	test_path_is_dir outer-secondary
 '
 
 test_expect_success 'safe.bareRepository unset' '
@@ -84,6 +86,10 @@ test_expect_success 'no trace when "bare repository" is .git' '
 
 test_expect_success 'no trace when "bare repository" is a subdir of .git' '
 	expect_accepted_implicit -C outer-repo/.git/objects
+'
+
+test_expect_success 'no trace in $GIT_DIR of secondary worktree' '
+	expect_accepted_implicit -C outer-repo/.git/worktrees/outer-secondary
 '
 
 test_done
