@@ -128,7 +128,9 @@ static int cat_one_file(int opt, const char *exp_type, const char *obj_name,
 	switch (opt) {
 	case 't':
 		oi.type_name = &sb;
-		if (oid_object_info_extended(the_repository, &oid, &oi, flags) < 0)
+		if (obj_context.mode == S_IFGITLINK)
+			strbuf_addstr(&sb, "submodule");
+		else if (oid_object_info_extended(the_repository, &oid, &oi, flags) < 0)
 			die("git cat-file: could not get object info");
 		if (sb.len) {
 			printf("%s\n", sb.buf);
@@ -319,17 +321,26 @@ static void expand_atom(struct strbuf *sb, const char *atom, int len,
 		if (!data->mark_query)
 			strbuf_addstr(sb, oid_to_hex(&data->oid));
 	} else if (is_atom("objecttype", atom, len)) {
-		if (data->mark_query)
+		if (data->mode == S_IFGITLINK) {
+			if (!data->mark_query)
+				strbuf_addstr(sb, "submodule");
+		} else if (data->mark_query)
 			data->info.typep = &data->type;
 		else
 			strbuf_addstr(sb, type_name(data->type));
 	} else if (is_atom("objectsize", atom, len)) {
-		if (data->mark_query)
+		if (data->mode == S_IFGITLINK) {
+			if (!data->mark_query)
+				strbuf_addstr(sb, "0");
+		} else if (data->mark_query)
 			data->info.sizep = &data->size;
 		else
 			strbuf_addf(sb, "%"PRIuMAX , (uintmax_t)data->size);
 	} else if (is_atom("objectsize:disk", atom, len)) {
-		if (data->mark_query)
+		if (data->mode == S_IFGITLINK) {
+			if (!data->mark_query)
+				strbuf_addstr(sb, "0");
+		} else if (data->mark_query)
 			data->info.disk_sizep = &data->disk_size;
 		else
 			strbuf_addf(sb, "%"PRIuMAX, (uintmax_t)data->disk_size);
@@ -448,7 +459,8 @@ static void print_default_format(struct strbuf *scratch, struct expand_data *dat
 				 struct batch_options *opt)
 {
 	strbuf_addf(scratch, "%s %s %"PRIuMAX"%c", oid_to_hex(&data->oid),
-		    type_name(data->type),
+		    data->mode == S_IFGITLINK ?
+		    "submodule" : type_name(data->type),
 		    (uintmax_t)data->size, opt->output_delim);
 }
 
@@ -470,7 +482,15 @@ static void batch_object_write(const char *obj_name,
 		if (use_mailmap)
 			data->info.typep = &data->type;
 
-		if (pack)
+		if (data->mode == S_IFGITLINK) {
+			data->type = OBJ_BAD; /* `type_name()` does not know submodules */
+			data->size = 0;
+			data->disk_size = 0;
+			data->rest = NULL;
+			oidcpy(&data->delta_base_oid, null_oid());
+			memset(&data->info, 0, sizeof(data->info));
+			ret = 0; /* no info to look up */
+		} else if (pack)
 			ret = packed_object_info(the_repository, pack, offset,
 						 &data->info);
 		else

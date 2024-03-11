@@ -1178,6 +1178,16 @@ test_expect_success 'cat-file --batch-check respects replace objects' '
 	test_cmp expect actual
 '
 
+test_expect_success 'batch-command with a submodule' '
+	printf "160000 commit %0.*d\tsub\n" $(test_oid hexsz) 17 >tree-with-sub &&
+	tree=$(git mktree <tree-with-sub) &&
+	git cat-file --batch-check >actual <<-EOF &&
+	$tree:sub
+	EOF
+	printf "%0.*d submodule 0\n" $(test_oid hexsz) 17 >expect &&
+	test_cmp expect actual
+'
+
 # Pull the entry for object with oid "$1" out of the output of
 # "cat-file --batch", including its object content (which requires
 # parsing and reading a set amount of bytes, hence perl).

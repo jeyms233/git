@@ -412,6 +412,11 @@ Note also that multiple copies of an object may be present in the object
 database; in this case, it is undefined which copy's size or delta base
 will be reported.
 
+Submodules are handled specially in `git cat-file`, as the objects
+corresponding to the recorded OIDs are not expected to be present in the
+current repository. For that reason, submodules are reported as having
+type `submodule` and mode 1600000 and all other fields are zeroed out.
+
 GIT
 ---
 Part of the linkgit:git[1] suite
