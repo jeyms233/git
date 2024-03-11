@@ -272,6 +272,7 @@ struct expand_data {
 	struct object_id oid;
 	enum object_type type;
 	unsigned long size;
+	unsigned short mode;
 	off_t disk_size;
 	const char *rest;
 	struct object_id delta_base_oid;
@@ -303,6 +304,7 @@ struct expand_data {
 	 */
 	unsigned skip_object_info : 1;
 };
+#define EXPAND_DATA_INIT  { .mode = S_IFINVALID }
 
 static int is_atom(const char *atom, const char *s, int slen)
 {
@@ -342,6 +344,9 @@ static void expand_atom(struct strbuf *sb, const char *atom, int len,
 		else
 			strbuf_addstr(sb,
 				      oid_to_hex(&data->delta_base_oid));
+	} else if (is_atom("objectmode", atom, len)) {
+		if (!data->mark_query && !(S_IFINVALID == data->mode))
+			strbuf_addf(sb, "%06o", data->mode);
 	} else
 		die("unknown format element: %.*s", len, atom);
 }
@@ -562,6 +567,7 @@ static void batch_one_object(const char *obj_name,
 		return;
 	}
 
+	data->mode = ctx.mode;
 	batch_object_write(obj_name, scratch, opt, data, NULL, 0);
 }
 
@@ -766,7 +772,7 @@ static int batch_objects(struct batch_options *opt)
 {
 	struct strbuf input = STRBUF_INIT;
 	struct strbuf output = STRBUF_INIT;
-	struct expand_data data;
+	struct expand_data data = EXPAND_DATA_INIT;
 	int save_warning;
 	int retval = 0;
 
@@ -775,7 +781,6 @@ static int batch_objects(struct batch_options *opt)
 	 * object_info to be handed to oid_object_info_extended for each
 	 * object.
 	 */
-	memset(&data, 0, sizeof(data));
 	data.mark_query = 1;
 	expand_format(&output,
 		      opt->format ? opt->format : DEFAULT_FORMAT,

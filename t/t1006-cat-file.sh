@@ -114,9 +114,10 @@ run_tests () {
     type=$1
     object_name=$2
     oid=$(git rev-parse --verify $object_name)
-    size=$3
-    content=$4
-    pretty_content=$5
+    mode=$3
+    size=$4
+    content=$5
+    pretty_content=$6
 
     batch_output="$oid $type $size
 $content"
@@ -211,6 +212,12 @@ $content"
 	test_cmp expect actual
     '
 
+    test_expect_success '--batch-check with %(objectmode)' '
+	echo "$mode $oid" >expect &&
+	echo $object_name | git cat-file --batch-check="%(objectmode) %(objectname)" >actual &&
+	test_cmp expect actual
+    '
+
     test -z "$content" ||
     test_expect_success "--batch without type ($type)" '
 	{
@@ -241,7 +248,7 @@ test_expect_success "setup" '
 	git update-index --add hello
 '
 
-run_tests 'blob' $hello_sha1 $hello_size "$hello_content" "$hello_content"
+run_tests 'blob' $hello_sha1 "" $hello_size "$hello_content" "$hello_content"
 
 test_expect_success '--batch-command --buffer with flush for blob info' '
 	echo "$hello_sha1 blob $hello_size" >expect &&
@@ -271,8 +278,8 @@ tree_sha1=$(git write-tree)
 tree_size=$(($(test_oid rawsz) + 13))
 tree_pretty_content="100644 blob $hello_sha1	hello${LF}"
 
-run_tests 'tree' $tree_sha1 $tree_size "" "$tree_pretty_content"
-run_tests 'blob' "$tree_sha1:hello" $hello_size "" "$hello_content"
+run_tests 'tree' $tree_sha1 "" $tree_size "" "$tree_pretty_content"
+run_tests 'blob' "$tree_sha1:hello" "100644" $hello_size "" "$hello_content"
 
 commit_message="Initial commit"
 commit_sha1=$(echo_without_newline "$commit_message" | git commit-tree $tree_sha1)
@@ -283,7 +290,7 @@ committer $GIT_COMMITTER_NAME <$GIT_COMMITTER_EMAIL> $GIT_COMMITTER_DATE
 
 $commit_message"
 
-run_tests 'commit' $commit_sha1 $commit_size "$commit_content" "$commit_content"
+run_tests 'commit' $commit_sha1 "" $commit_size "$commit_content" "$commit_content"
 
 tag_header_without_timestamp="object $hello_sha1
 type blob
@@ -297,7 +304,7 @@ $tag_description"
 tag_sha1=$(echo_without_newline "$tag_content" | git hash-object -t tag --stdin -w)
 tag_size=$(strlen "$tag_content")
 
-run_tests 'tag' $tag_sha1 $tag_size "$tag_content" "$tag_content"
+run_tests 'tag' $tag_sha1 "" $tag_size "$tag_content" "$tag_content"
 
 test_expect_success "Reach a blob from a tag pointing to it" '
 	echo_without_newline "$hello_content" >expect &&
