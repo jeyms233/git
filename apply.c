@@ -4491,17 +4491,22 @@ static int create_one_file(struct apply_state *state,
 		unsigned int nr = getpid();
 
 		for (;;) {
-			char newpath[PATH_MAX];
-			mksnpath(newpath, sizeof(newpath), "%s~%u", path, nr);
+			char *newpath = mkpathdup("%s~%u", path, nr);
 			res = try_create_file(state, newpath, mode, buf, size);
-			if (res < 0)
+			if (res < 0) {
+				free(newpath);
 				return -1;
+			}
 			if (!res) {
-				if (!rename(newpath, path))
+				if (!rename(newpath, path)) {
+					free(newpath);
 					return 0;
+				}
 				unlink_or_warn(newpath);
+				free(newpath);
 				break;
 			}
+			free(newpath);
 			if (errno != EEXIST)
 				break;
 			++nr;
