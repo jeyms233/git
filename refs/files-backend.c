@@ -2610,6 +2610,27 @@ static int lock_ref_for_update(struct files_ref_store *refs,
 		}
 	}
 
+	if (update->new_target) {
+		if (create_symref_lock(refs, lock, update->refname, update->new_target)) {
+			ret = TRANSACTION_GENERIC_ERROR;
+			goto out;
+		}
+
+		if (close_ref_gently(lock)) {
+			strbuf_addf(err, "couldn't close '%s.lock'",
+				    update->refname);
+			ret = TRANSACTION_GENERIC_ERROR;
+			goto out;
+		}
+
+		/*
+		 * Once we have created the symref lock, the commit
+		 * phase of the transaction only needs to commit the lock.
+		 */
+		update->flags |= REF_NEEDS_COMMIT;
+	}
+
+
 	if ((update->flags & REF_HAVE_NEW) &&
 	    !(update->flags & REF_DELETING) &&
 	    !(update->flags & REF_LOG_ONLY)) {
@@ -2905,6 +2926,18 @@ static int files_transaction_finish(struct ref_store *ref_store,
 
 		if (update->flags & REF_NEEDS_COMMIT ||
 		    update->flags & REF_LOG_ONLY) {
+			if (update->new_target) {
+				/*
+				 * We want to get the resolved OID for the target, to ensure
+				 * that the correct value is added to the reflog.
+				 */
+				if (!refs_resolve_ref_unsafe(&refs->base, update->new_target,
+							     RESOLVE_REF_READING, &update->new_oid, NULL)) {
+					/* for dangling symrefs we gracefully set the oid to zero */
+					update->new_oid = *null_oid();
+				}
+			}
+
 			if (files_log_ref_write(refs,
 						lock->ref_name,
 						&lock->old_oid,
@@ -2922,6 +2955,15 @@ static int files_transaction_finish(struct ref_store *ref_store,
 				goto cleanup;
 			}
 		}
+
+		/*
+		 * We try creating a symlink, if that succeeds we continue to the
+		 * next updated. If not, we try and create a regular symref.
+		 */
+		if (update->new_target && prefer_symlink_refs)
+			if (!create_ref_symlink(lock, update->new_target))
+				continue;
+
 		if (update->flags & REF_NEEDS_COMMIT) {
 			clear_loose_ref_cache(refs);
 			if (commit_ref(lock)) {
