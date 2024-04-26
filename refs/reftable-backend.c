@@ -905,7 +905,8 @@ static int reftable_be_transaction_prepare(struct ref_store *ref_store,
 				 */
 				new_update = ref_transaction_add_update(
 						transaction, referent.buf, new_flags,
-						&u->new_oid, &u->old_oid, NULL, NULL, u->msg);
+						&u->new_oid, &u->old_oid, u->new_target,
+						u->old_target, u->msg);
 				new_update->parent_update = u;
 
 				/*
