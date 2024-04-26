@@ -2426,6 +2426,37 @@ static const char *original_update_refname(struct ref_update *update)
 }
 
 /*
+ * Check whether the REF_HAVE_OLD and old_target values stored in
+ * update are consistent with ref, which is the symbolic reference's
+ * current value. If everything is OK, return 0; otherwise, write an
+ * error message to err and return -1.
+ */
+static int check_old_target(struct ref_update *update, char *ref,
+			    struct strbuf *err)
+{
+	if (!(update->flags & REF_HAVE_OLD) ||
+	    !strcmp(update->old_target, ref))
+		return 0;
+
+	if (!strcmp(update->old_target, ""))
+		strbuf_addf(err, "cannot lock ref '%s': "
+			    "reference already exists",
+			    original_update_refname(update));
+	else if (!strcmp(ref, ""))
+		strbuf_addf(err, "cannot lock ref '%s': "
+			    "reference is missing but expected %s",
+			    original_update_refname(update),
+			    update->old_target);
+	else
+		strbuf_addf(err, "cannot lock ref '%s': "
+			    "is at %s but expected %s",
+			    original_update_refname(update),
+			    ref, update->old_target);
+
+	return -1;
+}
+
+/*
  * Check whether the REF_HAVE_OLD and old_oid values stored in update
  * are consistent with oid, which is the reference's current value. If
  * everything is OK, return 0; otherwise, write an error message to
@@ -2525,6 +2556,18 @@ static int lock_ref_for_update(struct files_ref_store *refs,
 					strbuf_addf(err, "cannot lock ref '%s': "
 						    "error reading reference",
 						    original_update_refname(update));
+					ret = TRANSACTION_GENERIC_ERROR;
+					goto out;
+				}
+			}
+
+			/*
+			 * For symref verification, we need to check the reference value
+			 * rather than the oid. If we're dealing with regular refs or we're
+			 * verifying a dereferenced symref, we then check the oid.
+			 */
+			if (update->old_target) {
+				if (check_old_target(update, referent.buf, err)) {
 					ret = TRANSACTION_GENERIC_ERROR;
 					goto out;
 				}

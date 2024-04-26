@@ -935,7 +935,26 @@ static int reftable_be_transaction_prepare(struct ref_store *ref_store,
 		 * individual refs. But the error messages match what the files
 		 * backend returns, which keeps our tests happy.
 		 */
-		if (u->flags & REF_HAVE_OLD && !oideq(&current_oid, &u->old_oid)) {
+		if ((u->flags & REF_HAVE_OLD) && u->old_target) {
+			if (strcmp(referent.buf, u->old_target)) {
+				if (!strcmp(u->old_target, ""))
+					strbuf_addf(err, "verifying symref target: '%s': "
+						    "provided target is empty",
+						    original_update_refname(u));
+				else if (!strcmp(referent.buf, ""))
+					strbuf_addf(err, "verifying symref target: '%s': "
+						    "reference is missing but expected %s",
+						    original_update_refname(u),
+						    u->old_target);
+				else
+					strbuf_addf(err, "verifying symref target: '%s': "
+						    "is at %s but expected %s",
+						    original_update_refname(u),
+						    referent.buf, u->old_target);
+				ret = -1;
+				goto done;
+			}
+		} else if (u->flags & REF_HAVE_OLD && !oideq(&current_oid, &u->old_oid)) {
 			if (is_null_oid(&u->old_oid))
 				strbuf_addf(err, _("cannot lock ref '%s': "
 					    "reference already exists"),
