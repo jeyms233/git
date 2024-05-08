@@ -36,4 +36,19 @@ test_expect_success 'get by URL: 200' '
 	test_cmp "$HTTPD_DOCUMENT_ROOT_PATH/exists.txt" file2
 '
 
+test_expect_success 'get by URL with progress' '
+	echo hello >"$HTTPD_DOCUMENT_ROOT_PATH/hello.txt" &&
+
+	url="$HTTPD_URL/hello.txt" &&
+	cat >input <<-EOF &&
+	capabilities
+	option progress true
+	get $url file3
+
+	EOF
+
+	git remote-http $url <input 2>err &&
+	test_grep "^Downloading via HTTP: 100%" err
+'
+
 test_done

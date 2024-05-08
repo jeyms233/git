@@ -1293,6 +1293,7 @@ static void parse_get(const char *arg)
 {
 	struct strbuf url = STRBUF_INIT;
 	struct strbuf path = STRBUF_INIT;
+	struct http_get_options http_options = {0};
 	const char *space;
 
 	space = strchr(arg, ' ');
@@ -1303,7 +1304,12 @@ static void parse_get(const char *arg)
 	strbuf_add(&url, arg, space - arg);
 	strbuf_addstr(&path, space + 1);
 
-	if (http_get_file(url.buf, path.buf, NULL))
+	http_options.initial_request = 1;
+
+	if (options.progress)
+		http_options.progress = 1;
+
+	if (http_get_file(url.buf, path.buf, &http_options))
 		die(_("failed to download file at URL '%s'"), url.buf);
 
 	strbuf_release(&url);
