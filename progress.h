@@ -14,6 +14,7 @@ void progress_test_force_update(void);
 
 void display_throughput(struct progress *progress, uint64_t total);
 void display_progress(struct progress *progress, uint64_t n);
+void progress_set_total(struct progress *progress, uint64_t total);
 struct progress *start_progress(const char *title, uint64_t total);
 struct progress *start_sparse_progress(const char *title, uint64_t total);
 struct progress *start_delayed_progress(const char *title, uint64_t total);

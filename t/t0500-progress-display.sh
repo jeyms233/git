@@ -56,6 +56,30 @@ test_expect_success 'progress display with total' '
 	test_cmp expect out
 '
 
+test_expect_success 'progress display modify total' '
+	cat >expect <<-\EOF &&
+	Working hard: 1<CR>
+	Working hard:  66% (2/3)<CR>
+	Working hard: 100% (3/3)<CR>
+	Working hard: 100% (3/3), done.
+	EOF
+
+	cat >in <<-\EOF &&
+	start 0
+	update
+	progress 1
+	update
+	total 3
+	progress 2
+	progress 3
+	stop
+	EOF
+	test-tool progress <in 2>stderr &&
+
+	show_cr <stderr >out &&
+	test_cmp expect out
+'
+
 test_expect_success 'progress display breaks long lines #1' '
 	sed -e "s/Z$//" >expect <<\EOF &&
 Working hard.......2.........3.........4.........5.........6:   0% (100/100000)<CR>

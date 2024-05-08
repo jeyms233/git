@@ -271,6 +271,12 @@ static struct progress *start_progress_delay(const char *title, uint64_t total,
 	return progress;
 }
 
+void progress_set_total(struct progress *progress, uint64_t total)
+{
+	if (progress)
+		progress->total = total;
+}
+
 static int get_default_delay(void)
 {
 	static int delay_in_secs = -1;

@@ -70,6 +70,11 @@ int cmd__progress(int argc, const char **argv)
 			if (*end != '\0')
 				die("invalid input: '%s'\n", line.buf);
 			display_progress(progress, item_count);
+		} else if (skip_prefix(line.buf, "total ", (const char **) &end)) {
+			uint64_t total = strtoull(end, &end, 10);
+			if (*end != '\0')
+				die("invalid input: '%s'\n", line.buf);
+			progress_set_total(progress, total);
 		} else if (skip_prefix(line.buf, "throughput ",
 				       (const char **) &end)) {
 			uint64_t byte_count, test_ms;
