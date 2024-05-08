@@ -146,6 +146,11 @@ struct http_get_options {
 	 * request has completed.
 	 */
 	struct string_list *extra_headers;
+
+	/*
+	 * If not zero, display the progress.
+	 */
+	int progress;
 };
 
 /* Return values for http_get_*() */

@@ -10,6 +10,7 @@
 #include "credential.h"
 #include "version.h"
 #include "pkt-line.h"
+#include "progress.h"
 #include "gettext.h"
 #include "trace.h"
 #include "transport.h"
@@ -1457,6 +1458,9 @@ struct active_request_slot *get_active_slot(void)
 	curl_easy_setopt(slot->curl, CURLOPT_HTTPGET, 1);
 	curl_easy_setopt(slot->curl, CURLOPT_FAILONERROR, 1);
 	curl_easy_setopt(slot->curl, CURLOPT_RANGE, NULL);
+	curl_easy_setopt(slot->curl, CURLOPT_NOPROGRESS, 1L);
+	curl_easy_setopt(slot->curl, CURLOPT_XFERINFODATA, NULL);
+	curl_easy_setopt(slot->curl, CURLOPT_XFERINFOFUNCTION, NULL);
 
 	/*
 	 * Default following to off unless "ALWAYS" is configured; this gives
@@ -2017,6 +2021,21 @@ static void http_opt_request_remainder(CURL *curl, off_t pos)
 #define HTTP_REQUEST_STRBUF	0
 #define HTTP_REQUEST_FILE	1
 
+static int http_progress_callback(void *clientp, curl_off_t dltotal,
+				  curl_off_t dlnow, curl_off_t ultotal,
+				  curl_off_t ulnow)
+{
+	struct progress *progress = clientp;
+
+	if (progress) {
+		progress_set_total(progress, dltotal);
+		display_progress(progress, dlnow);
+		display_throughput(progress, dlnow);
+	}
+
+	return 0;
+}
+
 static int http_request(const char *url,
 			void *result, int target,
 			const struct http_get_options *options)
@@ -2025,6 +2044,7 @@ static int http_request(const char *url,
 	struct slot_results results;
 	struct curl_slist *headers = http_copy_default_headers();
 	struct strbuf buf = STRBUF_INIT;
+	struct progress *progress = NULL;
 	const char *accept_language;
 	int ret;
 
@@ -2061,6 +2081,13 @@ static int http_request(const char *url,
 	if (options && options->initial_request &&
 	    http_follow_config == HTTP_FOLLOW_INITIAL)
 		curl_easy_setopt(slot->curl, CURLOPT_FOLLOWLOCATION, 1);
+	if (options && options->progress) {
+		progress = start_progress(_("Downloading via HTTP"), 0);
+
+		curl_easy_setopt(slot->curl, CURLOPT_NOPROGRESS, 0L);
+		curl_easy_setopt(slot->curl, CURLOPT_XFERINFODATA, progress);
+		curl_easy_setopt(slot->curl, CURLOPT_XFERINFOFUNCTION, &http_progress_callback);
+	}
 
 	headers = curl_slist_append(headers, buf.buf);
 
@@ -2078,6 +2105,11 @@ static int http_request(const char *url,
 	curl_easy_setopt(slot->curl, CURLOPT_FAILONERROR, 0);
 
 	ret = run_one_slot(slot, &results);
+
+	if (progress) {
+		curl_easy_setopt(slot->curl, CURLOPT_XFERINFODATA, NULL);
+		stop_progress(&progress);
+	}
 
 	if (options && options->content_type) {
 		struct strbuf raw = STRBUF_INIT;
