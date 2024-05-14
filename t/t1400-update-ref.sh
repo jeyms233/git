@@ -1783,6 +1783,71 @@ do
 		test_must_fail git symbolic-ref -d refs/heads/symref2
 	'
 
+	test_expect_success "stdin ${type} symref-create fails with too many arguments" '
+		create_stdin_buf ${type} "symref-create refs/heads/symref" "$a" "$a" >stdin &&
+		test_must_fail git update-ref --stdin ${type} --no-deref <stdin 2>err &&
+		if test "$type" = "-z"
+		then
+			grep "fatal: unknown command: $a" err
+		else
+			grep "fatal: symref-create refs/heads/symref: extra input:  $a" err
+		fi
+	'
+
+	test_expect_success "stdin ${type} symref-create fails with no target" '
+		create_stdin_buf ${type} "symref-create refs/heads/symref" >stdin &&
+		test_must_fail git update-ref --stdin ${type} --no-deref <stdin
+	'
+
+	test_expect_success "stdin ${type} symref-create fails with empty target" '
+		create_stdin_buf ${type} "symref-create refs/heads/symref" "" >stdin &&
+		test_must_fail git update-ref --stdin ${type} --no-deref <stdin
+	'
+
+	test_expect_success "stdin ${type} symref-create works" '
+		test_when_finished "git symbolic-ref -d refs/heads/symref" &&
+		create_stdin_buf ${type} "symref-create refs/heads/symref" "$a" >stdin &&
+		git update-ref --stdin ${type} --no-deref <stdin &&
+		git symbolic-ref refs/heads/symref >expect &&
+		echo $a >actual &&
+		test_cmp expect actual
+	'
+
+	test_expect_success "stdin ${type} symref-create works with --no-deref" '
+		test_when_finished "git symbolic-ref -d refs/heads/symref" &&
+		create_stdin_buf ${type} "symref-create refs/heads/symref" "$a" &&
+		git update-ref --stdin ${type} <stdin 2>err
+	'
+
+	test_expect_success "stdin ${type} create dangling symref ref works" '
+		test_when_finished "git symbolic-ref -d refs/heads/symref" &&
+		create_stdin_buf ${type} "symref-create refs/heads/symref" "refs/heads/unkown" >stdin &&
+		git update-ref --stdin ${type} --no-deref <stdin &&
+		git symbolic-ref refs/heads/symref >expect &&
+		echo refs/heads/unkown >actual &&
+		test_cmp expect actual
+	'
+
+	test_expect_success "stdin ${type} symref-create does not create reflogs by default" '
+		test_when_finished "git symbolic-ref -d refs/symref" &&
+		create_stdin_buf ${type} "symref-create refs/symref" "$a" >stdin &&
+		git update-ref --stdin ${type} --no-deref <stdin &&
+		git symbolic-ref refs/symref >expect &&
+		echo $a >actual &&
+		test_cmp expect actual &&
+		test_must_fail git reflog exists refs/symref
+	'
+
+	test_expect_success "stdin ${type} symref-create reflogs with --create-reflog" '
+		test_when_finished "git symbolic-ref -d refs/heads/symref" &&
+		create_stdin_buf ${type} "symref-create refs/heads/symref" "$a" >stdin &&
+		git update-ref --create-reflog --stdin ${type} --no-deref <stdin &&
+		git symbolic-ref refs/heads/symref >expect &&
+		echo $a >actual &&
+		test_cmp expect actual &&
+		git reflog exists refs/heads/symref
+	'
+
 done
 
 test_done
