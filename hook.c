@@ -4,32 +4,6 @@
 #include "config.h"
 #include "strmap.h"
 
-static int identical_to_template_hook(const char *name, const char *path)
-{
-	const char *env = getenv("GIT_CLONE_TEMPLATE_DIR");
-	const char *template_dir = get_template_dir(env && *env ? env : NULL);
-	struct strbuf template_path = STRBUF_INIT;
-	int found_template_hook, ret;
-
-	strbuf_addf(&template_path, "%s/hooks/%s", template_dir, name);
-	found_template_hook = access(template_path.buf, X_OK) >= 0;
-#ifdef STRIP_EXTENSION
-	if (!found_template_hook) {
-		strbuf_addstr(&template_path, STRIP_EXTENSION);
-		found_template_hook = access(template_path.buf, X_OK) >= 0;
-	}
-#endif
-	if (!found_template_hook) {
-		strbuf_release(&template_path);
-		return 0;
-	}
-
-	ret = do_files_match(template_path.buf, path);
-
-	strbuf_release(&template_path);
-	return ret;
-}
-
 static struct strset safe_hook_sha256s = STRSET_INIT;
 static int safe_hook_sha256s_initialized;
 
@@ -58,6 +32,22 @@ static int get_sha256_of_file_contents(const char *path, char *sha256)
 	hash_to_hex_algop_r(sha256, hash, algo);
 
 	return 0;
+}
+
+void add_safe_hook(const char *path)
+{
+	char sha256[GIT_SHA256_HEXSZ + 1] = { '\0' };
+
+	if (!get_sha256_of_file_contents(path, sha256)) {
+		char *p;
+
+		strset_add(&safe_hook_sha256s, sha256);
+
+		/* support multi-process operations e.g. recursive clones */
+		p = xstrfmt("safe.hook.sha256=%s", sha256);
+		git_config_push_parameter(p);
+		free(p);
+	}
 }
 
 static int safe_hook_cb(const char *key, const char *value, void *d)
@@ -131,7 +121,6 @@ const char *find_hook(const char *name)
 		return NULL;
 	}
 	if (!git_hooks_path && git_env_bool("GIT_CLONE_PROTECTION_ACTIVE", 0) &&
-	    !identical_to_template_hook(name, path.buf) &&
 	    !is_hook_safe_during_clone(name, path.buf, sha256))
 		die(_("active `%s` hook found during `git clone`:\n\t%s\n"
 		      "For security reasons, this is disallowed by default.\n"

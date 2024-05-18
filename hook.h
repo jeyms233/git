@@ -82,4 +82,14 @@ int run_hooks(const char *hook_name);
  * hook. This function behaves like the old run_hook_le() API.
  */
 int run_hooks_l(const char *hook_name, ...);
+
+/**
+ * Mark the contents of the provided path as safe to run during a clone
+ * operation.
+ *
+ * This function is mainly used when copying templates to mark the
+ * just-copied hooks as benign.
+ */
+void add_safe_hook(const char *path);
+
 #endif
