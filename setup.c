@@ -14,6 +14,7 @@
 #include "trace2.h"
 #include "wrapper.h"
 #include "exec-cmd.h"
+#include "hook.h"
 
 static int inside_git_dir = -1;
 static int inside_work_tree = -1;
