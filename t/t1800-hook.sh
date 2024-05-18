@@ -185,19 +185,39 @@ test_expect_success 'stdin to hooks' '
 	test_cmp expect actual
 '
 
-test_expect_success 'clone protections' '
-	test_config core.hooksPath "$(pwd)/my-hooks" &&
-	mkdir -p my-hooks &&
-	write_script my-hooks/test-hook <<-\EOF &&
-	echo Hook ran $1
+test_expect_success '`safe.hook.sha256` and clone protections' '
+	git init safe-hook &&
+	write_script safe-hook/.git/hooks/pre-push <<-\EOF &&
+	echo "called hook" >safe-hook.log
 	EOF
 
-	git hook run test-hook 2>err &&
-	test_grep "Hook ran" err &&
 	test_must_fail env GIT_CLONE_PROTECTION_ACTIVE=true \
-		git hook run test-hook 2>err &&
-	test_grep "active .core.hooksPath" err &&
-	test_grep ! "Hook ran" err
+		git -C safe-hook hook run pre-push 2>err &&
+	cmd="$(grep "git config --global --add safe.hook.sha256 [0-9a-f]" err)" &&
+	eval "$cmd" &&
+	GIT_CLONE_PROTECTION_ACTIVE=true \
+		git -C safe-hook hook run pre-push &&
+	test "called hook" = "$(cat safe-hook/safe-hook.log)"
+'
+
+write_lfs_pre_push_hook () {
+	write_script "$1" <<-\EOF
+	command -v git-lfs >/dev/null 2>&1 || { echo >&2 "\nThis repository is configured for Git LFS but 'git-lfs' was not found on your path. If you no longer wish to use Git LFS, remove this hook by deleting the 'pre-push' file in the hooks directory (set by 'core.hookspath'; usually '.git/hooks').\n"; exit 2; }
+	git lfs pre-push "$@"
+	EOF
+}
+
+test_expect_success 'Git LFS special-handling in clone protections' '
+	git init lfs-hooks &&
+	write_lfs_pre_push_hook lfs-hooks/.git/hooks/pre-push &&
+	write_script git-lfs <<-\EOF &&
+	echo "called $*" >fake-git-lfs.log
+	EOF
+
+	PATH="$PWD:$PATH" GIT_CLONE_PROTECTION_ACTIVE=true \
+		git -C lfs-hooks hook run pre-push &&
+	test_write_lines "called pre-push" >expect &&
+	test_cmp lfs-hooks/fake-git-lfs.log expect
 '
 
 test_done
