@@ -17,6 +17,8 @@
 #include "trace2.h"
 #include "worktree.h"
 #include "exec-cmd.h"
+#include "run-command.h"
+#include "hook.h"
 
 static int inside_git_dir = -1;
 static int inside_work_tree = -1;
@@ -1868,6 +1870,7 @@ static void copy_templates_1(struct strbuf *path, struct strbuf *template_path,
 	size_t path_baselen = path->len;
 	size_t template_baselen = template_path->len;
 	struct dirent *de;
+	int is_hooks_dir = ends_with(template_path->buf, "/hooks/");
 
 	/* Note: if ".git/hooks" file exists in the repository being
 	 * re-initialized, /etc/core-git/templates/hooks/update would
@@ -1920,6 +1923,10 @@ static void copy_templates_1(struct strbuf *path, struct strbuf *template_path,
 			strbuf_release(&lnk);
 		}
 		else if (S_ISREG(st_template.st_mode)) {
+			if (is_hooks_dir &&
+			    is_executable(template_path->buf))
+				add_safe_hook(template_path->buf);
+
 			if (copy_file(path->buf, template_path->buf, st_template.st_mode))
 				die_errno(_("cannot copy '%s' to '%s'"),
 					  template_path->buf, path->buf);
