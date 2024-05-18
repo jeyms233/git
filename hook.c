@@ -77,6 +77,17 @@ static int is_hook_safe_during_clone(const char *name, const char *path, char *s
 
 	if (!safe_hook_sha256s_initialized) {
 		safe_hook_sha256s_initialized = 1;
+
+		/* Hard-code known-safe values for Git LFS v3.4.0..v3.5.1 */
+		/* pre-push */
+		strset_add(&safe_hook_sha256s, "df5417b2daa3aa144c19681d1e997df7ebfe144fb7e3e05138bd80ae998008e4");
+		/* post-checkout */
+		strset_add(&safe_hook_sha256s, "791471b4ff472aab844a4fceaa48bbb0a12193616f971e8e940625498b4938a6");
+		/* post-commit */
+		strset_add(&safe_hook_sha256s, "21e961572bb3f43a5f2fbafc1cc764d86046cc2e5f0bbecebfe9684a0b73b664");
+		/* post-merge */
+		strset_add(&safe_hook_sha256s, "75da0da66a803b4b030ad50801ba57062c6196105eb1d2251590d100edb9390b");
+
 		git_protected_config(safe_hook_cb, &safe_hook_sha256s);
 	}
 
