@@ -2,6 +2,7 @@
 #include "hook.h"
 #include "run-command.h"
 #include "config.h"
+#include "strmap.h"
 
 static int identical_to_template_hook(const char *name, const char *path)
 {
@@ -29,11 +30,65 @@ static int identical_to_template_hook(const char *name, const char *path)
 	return ret;
 }
 
+static struct strset safe_hook_sha256s = STRSET_INIT;
+static int safe_hook_sha256s_initialized;
+
+static int get_sha256_of_file_contents(const char *path, char *sha256)
+{
+	struct strbuf sb = STRBUF_INIT;
+	int fd;
+	ssize_t res;
+
+	git_hash_ctx ctx;
+	const struct git_hash_algo *algo = &hash_algos[GIT_HASH_SHA256];
+	unsigned char hash[GIT_MAX_RAWSZ];
+
+	if ((fd = open(path, O_RDONLY)) < 0)
+		return -1;
+	res = strbuf_read(&sb, fd, 400);
+	close(fd);
+	if (res < 0)
+		return -1;
+
+	algo->init_fn(&ctx);
+	algo->update_fn(&ctx, sb.buf, sb.len);
+	strbuf_release(&sb);
+	algo->final_fn(hash, &ctx);
+
+	hash_to_hex_algop_r(sha256, hash, algo);
+
+	return 0;
+}
+
+static int safe_hook_cb(const char *key, const char *value, void *d)
+{
+	struct strset *set = d;
+
+	if (value && !strcmp(key, "safe.hook.sha256"))
+		strset_add(set, value);
+
+	return 0;
+}
+
+static int is_hook_safe_during_clone(const char *name, const char *path, char *sha256)
+{
+	if (get_sha256_of_file_contents(path, sha256) < 0)
+		return 0;
+
+	if (!safe_hook_sha256s_initialized) {
+		safe_hook_sha256s_initialized = 1;
+		git_protected_config(safe_hook_cb, &safe_hook_sha256s);
+	}
+
+	return strset_contains(&safe_hook_sha256s, sha256);
+}
+
 const char *find_hook(const char *name)
 {
 	static struct strbuf path = STRBUF_INIT;
 
 	int found_hook;
+	char sha256[GIT_SHA256_HEXSZ + 1] = { '\0' };
 
 	strbuf_reset(&path);
 	strbuf_git_path(&path, "hooks/%s", name);
@@ -65,13 +120,14 @@ const char *find_hook(const char *name)
 		return NULL;
 	}
 	if (!git_hooks_path && git_env_bool("GIT_CLONE_PROTECTION_ACTIVE", 0) &&
-	    !identical_to_template_hook(name, path.buf))
+	    !identical_to_template_hook(name, path.buf) &&
+	    !is_hook_safe_during_clone(name, path.buf, sha256))
 		die(_("active `%s` hook found during `git clone`:\n\t%s\n"
 		      "For security reasons, this is disallowed by default.\n"
-		      "If this is intentional and the hook should actually "
-		      "be run, please\nrun the command again with "
-		      "`GIT_CLONE_PROTECTION_ACTIVE=false`"),
-		    name, path.buf);
+		      "If this is intentional and the hook is safe to run, "
+		      "please run the following command and try again:\n\n"
+		      "  git config --global --add safe.hook.sha256 %s"),
+		    name, path.buf, sha256);
 	return path.buf;
 }
 

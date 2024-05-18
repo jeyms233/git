@@ -177,4 +177,19 @@ test_expect_success 'git hook run a hook with a bad shebang' '
 	test_cmp expect actual
 '
 
+test_expect_success '`safe.hook.sha256` and clone protections' '
+	git init safe-hook &&
+	write_script safe-hook/.git/hooks/pre-push <<-\EOF &&
+	echo "called hook" >safe-hook.log
+	EOF
+
+	test_must_fail env GIT_CLONE_PROTECTION_ACTIVE=true \
+		git -C safe-hook hook run pre-push 2>err &&
+	cmd="$(grep "git config --global --add safe.hook.sha256 [0-9a-f]" err)" &&
+	eval "$cmd" &&
+	GIT_CLONE_PROTECTION_ACTIVE=true \
+		git -C safe-hook hook run pre-push &&
+	test "called hook" = "$(cat safe-hook/safe-hook.log)"
+'
+
 test_done
