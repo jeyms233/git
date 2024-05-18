@@ -59,3 +59,9 @@ which id the original user has.
 If that is not what you would prefer and want git to only trust
 repositories that are owned by root instead, then you can remove
 the `SUDO_UID` variable from root's environment before invoking git.
+
+safe.hook.sha256::
+	The value is the SHA-256 of hooks that are considered to be safe
+	to run during a clone operation.
++
+Multiple values can be added via `git config --global --add`.

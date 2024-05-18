@@ -819,6 +819,25 @@ test_expect_success 'clone with init.templatedir runs hooks' '
 		git config --unset init.templateDir &&
 		! grep "active .* hook found" err &&
 		test_path_is_missing hook-run-local-config/hook.run
+	) &&
+
+	test_config_global protocol.file.allow always &&
+	git -C tmpl/hooks submodule add "$(pwd)/tmpl/hooks" sub &&
+	test_tick &&
+	git -C tmpl/hooks add .gitmodules sub &&
+	git -C tmpl/hooks commit -m submodule &&
+
+	(
+		sane_unset GIT_TEMPLATE_DIR &&
+		NO_SET_GIT_TEMPLATE_DIR=t &&
+		export NO_SET_GIT_TEMPLATE_DIR &&
+
+		git -c init.templateDir="$(pwd)/tmpl" \
+			clone --recurse-submodules \
+			tmpl/hooks hook-run-submodule 2>err &&
+		! grep "active .* hook found" err &&
+		test_path_is_file hook-run-submodule/hook.run &&
+		test_path_is_file hook-run-submodule/sub/hook.run
 	)
 '
 
