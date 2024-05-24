@@ -1338,7 +1338,7 @@ int git_config_bool(const char *name, const char *value)
 	return v;
 }
 
-int git_config_string(const char **dest, const char *var, const char *value)
+int git_config_string(char **dest, const char *var, const char *value)
 {
 	if (!value)
 		return config_error_nonbool(var);
@@ -2418,7 +2418,7 @@ int git_configset_get_string(struct config_set *set, const char *key, char **des
 {
 	const char *value;
 	if (!git_configset_get_value(set, key, &value, NULL))
-		return git_config_string((const char **)dest, key, value);
+		return git_config_string(dest, key, value);
 	else
 		return 1;
 }
