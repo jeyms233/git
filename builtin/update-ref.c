@@ -297,7 +297,7 @@ static void parse_cmd_symref_update(struct ref_transaction *transaction,
 
 		if (!strcmp(old_arg, "oid") &&
 		    !repo_get_oid(the_repository, old_target, &old_oid)) {
-			old_target = NULL;
+			FREE_AND_NULL(old_target);
 			have_old = 1;
 		} else if (strcmp(old_arg, "ref"))
 			die("symref-update %s: invalid arg '%s' for old value", refname, old_arg);
