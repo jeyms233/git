@@ -27,3 +27,31 @@ it will be treated as a shell command.  For example, defining
   repository, which may not necessarily be the current directory.
 * `GIT_PREFIX` is set as returned by running `git rev-parse --show-prefix`
   from the original current directory. See linkgit:git-rev-parse[1].
+* If the shell alias is the full path to a binary, it will be executed
+  directly with any arguments as positional arguments.
+* If the alias contains any white-space or reserved characters, it
+  will be considered an inline script and run as an argument to `sh
+  -c`.
+* When running as a script, if arguments are provided to the alias
+  call, Git makes them available to the process by appending "$@" to
+  the alias shell command.  This is not appended if arguments are not
+  provided.
+** For "simple" commands, such as calling a single binary
+  (e.g. `alias.myapp = !myapp --myflag1`) this will result in any
+  arguments becoming additional regular positional arguments to the
+  called binary, appended after any arguments specified in the aliased
+  command.
+** Care should be taken if your alias script has multiple commands
+   (e.g. in a pipeline), references argument variables, or is
+   otherwise not expecting the presence of the appended `"$@"`.  For
+   example: `alias.echo = "!echo $1"` when run as `git echo arg` will
+   actually execute `sh -c "echo $1 $@" "echo $1" "arg"` resulting in
+   output `arg arg`.  When writing such aliases, you should ensure
+   that the appended "$@" when arguments are present does not cause
+   syntax errors or unintended side-effects.
+** A convenient way to deal with this is to write your script
+   operations in an inline function that is then called with any
+   arguments from the command-line.  For example `alias.cmd = "!c() {
+   cmd $1 | cmd $2 ; }; c" will allow you to work with separate
+   arguments.
+** Setting `GIT_TRACE=1` can help debug the command being run.
